@@ -41,6 +41,10 @@ CREATE TABLE routine_templates (
   days_of_week INTEGER[] DEFAULT '{1,2,3,4,5,6,0}',
   is_active BOOLEAN DEFAULT TRUE,
   order_index INTEGER DEFAULT 0,
+  time_type TEXT DEFAULT 'fixed',           -- 'fixed' | 'flexible'
+  start_time TIME,                           -- For fixed: exact time, for flexible: start of period
+  end_time TIME,                             -- For flexible: end of period
+  category TEXT,                             -- Optional category
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -240,6 +244,47 @@ CREATE TABLE deliveries (
 
 ALTER TABLE deliveries ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage own deliveries" ON deliveries
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Habits
+CREATE TABLE habits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  frequency_per_week INTEGER DEFAULT 7,        -- Goal: how many times per week
+  reminder_time TIME,                          -- Reminder time
+  target_days INTEGER DEFAULT 66,              -- Final goal (66 days = habit formed)
+  current_streak INTEGER DEFAULT 0,            -- Current consecutive days
+  longest_streak INTEGER DEFAULT 0,            -- Longest historical streak
+  level INTEGER DEFAULT 1,                     -- 1=starting, 2=21 days, 3=66 days
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE habits ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage own habits" ON habits
+  FOR ALL TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Habit Logs
+CREATE TABLE habit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  habit_id UUID REFERENCES habits(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  date DATE DEFAULT CURRENT_DATE,
+  completed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(habit_id, date)  -- One log per habit per day
+);
+CREATE INDEX idx_habit_logs_date ON habit_logs(user_id, date);
+CREATE INDEX idx_habit_logs_habit ON habit_logs(habit_id, date);
+
+ALTER TABLE habit_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage own habit_logs" ON habit_logs
   FOR ALL TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);

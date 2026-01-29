@@ -14,7 +14,7 @@ export function useDailyScore() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return { score: 0, streak: 0 }
 
-      // Get hydration data (20 points)
+      // Get hydration data (15 points)
       const { data: hydrationData } = await supabase
         .from('hydration_logs')
         .select('amount_ml')
@@ -22,9 +22,9 @@ export function useDailyScore() {
         .eq('date', today)
 
       const hydrationTotal = hydrationData?.reduce((sum, log) => sum + log.amount_ml, 0) ?? 0
-      const hydrationScore = Math.min(20, Math.round((hydrationTotal / 2500) * 20))
+      const hydrationScore = Math.min(15, Math.round((hydrationTotal / 2500) * 15))
 
-      // Get tasks data (30 points)
+      // Get tasks data (25 points)
       const { data: tasksData } = await supabase
         .from('tasks')
         .select('is_completed')
@@ -33,9 +33,27 @@ export function useDailyScore() {
 
       const totalTasks = tasksData?.length ?? 0
       const completedTasks = tasksData?.filter(t => t.is_completed).length ?? 0
-      const tasksScore = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 30) : 0
+      const tasksScore = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 25) : 0
 
-      // Get gym data (20 points)
+      // Get habits data (15 points) - NEW
+      const { data: habitsData } = await supabase
+        .from('habits')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+
+      const { data: habitLogsData } = await supabase
+        .from('habit_logs')
+        .select('habit_id, completed')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .eq('completed', true)
+
+      const totalHabits = habitsData?.length ?? 0
+      const completedHabits = habitLogsData?.length ?? 0
+      const habitsScore = totalHabits > 0 ? Math.round((completedHabits / totalHabits) * 15) : 0
+
+      // Get gym data (15 points)
       const { data: gymData } = await supabase
         .from('gym_sessions')
         .select('id')
@@ -43,7 +61,7 @@ export function useDailyScore() {
         .eq('date', today)
         .limit(1)
 
-      const gymScore = gymData && gymData.length > 0 ? 20 : 0
+      const gymScore = gymData && gymData.length > 0 ? 15 : 0
 
       // Get diet data (15 points)
       const { data: dietStatus } = await supabase
@@ -67,7 +85,8 @@ export function useDailyScore() {
       const pagesRead = readingData?.reduce((sum, log) => sum + log.pages_read, 0) ?? 0
       const readingScore = pagesRead >= 10 ? 15 : Math.round((pagesRead / 10) * 15)
 
-      const totalScore = hydrationScore + tasksScore + gymScore + dietScore + readingScore
+      // Total: 15 (hydration) + 25 (tasks) + 15 (habits) + 15 (gym) + 15 (diet) + 15 (reading) = 100
+      const totalScore = hydrationScore + tasksScore + habitsScore + gymScore + dietScore + readingScore
 
       // Calculate streak (consecutive days with score >= 70%)
       let streak = 0

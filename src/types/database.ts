@@ -21,6 +21,8 @@ export interface HydrationLog {
   created_at: string
 }
 
+export type TimeType = 'fixed' | 'flexible'
+
 export interface RoutineTemplate {
   id: string
   user_id: string
@@ -28,6 +30,10 @@ export interface RoutineTemplate {
   days_of_week: number[]
   is_active: boolean
   order_index: number
+  time_type: TimeType
+  start_time: string | null
+  end_time: string | null
+  category: string | null
   created_at: string
 }
 
@@ -131,5 +137,29 @@ export interface Delivery {
   project_id: string
   title: string
   is_completed: boolean
+  created_at: string
+}
+
+export interface Habit {
+  id: string
+  user_id: string
+  title: string
+  description: string | null
+  frequency_per_week: number
+  reminder_time: string | null
+  target_days: number
+  current_streak: number
+  longest_streak: number
+  level: number
+  is_active: boolean
+  created_at: string
+}
+
+export interface HabitLog {
+  id: string
+  habit_id: string
+  user_id: string
+  date: string
+  completed: boolean
   created_at: string
 }
