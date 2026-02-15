@@ -47,7 +47,7 @@ export function RoutineCreator() {
   )
 }
 
-function WeekPreview({ templates }: { templates: { title: string; days_of_week: number[]; is_active: boolean }[] }) {
+function WeekPreview({ templates }: { templates: { title: string; days_of_week: number[]; is_active: boolean; start_time: string | null }[] }) {
   const days = [
     { index: 0, name: 'Dom' },
     { index: 1, name: 'Seg' },
@@ -63,7 +63,14 @@ function WeekPreview({ templates }: { templates: { title: string; days_of_week: 
   return (
     <div className="grid grid-cols-7 gap-2">
       {days.map(day => {
-        const dayTemplates = activeTemplates.filter(t => t.days_of_week.includes(day.index))
+        const dayTemplates = activeTemplates
+          .filter(t => t.days_of_week.includes(day.index))
+          .sort((a, b) => {
+            if (a.start_time && b.start_time) return a.start_time.localeCompare(b.start_time)
+            if (a.start_time && !b.start_time) return -1
+            if (!a.start_time && b.start_time) return 1
+            return 0
+          })
         return (
           <div key={day.index} className="text-center">
             <div className="text-xs font-medium text-muted-foreground mb-2">

@@ -21,14 +21,24 @@ export function TaskItem({ task, onToggle, onDelete, disabled }: TaskItemProps) 
         onCheckedChange={(checked) => onToggle(task.id, checked as boolean)}
         disabled={disabled}
       />
-      <span
-        className={cn(
-          'flex-1 text-sm',
-          task.is_completed && 'line-through text-muted-foreground'
+      <div className="flex-1 min-w-0">
+        <span
+          className={cn(
+            'text-sm',
+            task.is_completed && 'line-through text-muted-foreground'
+          )}
+        >
+          {task.title}
+        </span>
+        {task.scheduled_time && (
+          <span className={cn(
+            'block text-xs text-muted-foreground',
+            task.is_completed && 'line-through'
+          )}>
+            {task.scheduled_time.slice(0, 5)}
+          </span>
         )}
-      >
-        {task.title}
-      </span>
+      </div>
       <Button
         variant="ghost"
         size="icon"

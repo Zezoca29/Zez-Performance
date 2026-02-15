@@ -9,21 +9,19 @@ import type { RoutineTemplate, TimeType } from '@/types/database'
 async function generateTodayTaskForTemplate(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  templateId: string,
-  title: string,
-  daysOfWeek: number[]
+  template: { id: string; title: string; days_of_week: number[]; order_index: number; start_time: string | null }
 ) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const dayOfWeek = new Date().getDay()
 
   // Check if today is in the template's days
-  if (!daysOfWeek.includes(dayOfWeek)) return
+  if (!template.days_of_week.includes(dayOfWeek)) return
 
   // Check if task already exists for this template today
   const { data: existing } = await supabase
     .from('tasks')
     .select('id')
-    .eq('template_id', templateId)
+    .eq('template_id', template.id)
     .eq('date', today)
     .limit(1)
 
@@ -31,11 +29,13 @@ async function generateTodayTaskForTemplate(
 
   await supabase.from('tasks').insert({
     user_id: userId,
-    template_id: templateId,
-    title,
+    template_id: template.id,
+    title: template.title,
     date: today,
     is_completed: false,
     is_routine: true,
+    order_index: template.order_index,
+    scheduled_time: template.start_time ?? null,
   })
 }
 
@@ -52,10 +52,21 @@ export function useRoutineTemplates() {
         .from('routine_templates')
         .select('*')
         .eq('user_id', user.id)
-        .order('order_index', { ascending: true })
+        .order('created_at', { ascending: true })
 
       if (error) throw error
-      return data as RoutineTemplate[]
+
+      // Sort by start_time (tasks with time first, ordered by time; then tasks without time)
+      const sorted = [...(data ?? [])].sort((a, b) => {
+        const timeA = a.start_time
+        const timeB = b.start_time
+        if (timeA && timeB) return timeA.localeCompare(timeB)
+        if (timeA && !timeB) return -1
+        if (!timeA && timeB) return 1
+        return a.order_index - b.order_index
+      })
+
+      return sorted as RoutineTemplate[]
     },
   })
 }
@@ -106,9 +117,7 @@ export function useCreateRoutineTemplate() {
       if (error) throw error
 
       // Immediately generate today's task if this template applies to today
-      await generateTodayTaskForTemplate(
-        supabase, user.id, data.id, data.title, data.days_of_week
-      )
+      await generateTodayTaskForTemplate(supabase, user.id, data)
 
       return data
     },
@@ -152,9 +161,7 @@ export function useUpdateRoutineTemplate() {
 
       // If template is active, ensure today's task exists
       if (data.is_active) {
-        await generateTodayTaskForTemplate(
-          supabase, user.id, data.id, data.title, data.days_of_week
-        )
+        await generateTodayTaskForTemplate(supabase, user.id, data)
       }
 
       return data
@@ -206,9 +213,7 @@ export function useToggleRoutineTemplate() {
 
       // If activating, generate today's task
       if (is_active) {
-        await generateTodayTaskForTemplate(
-          supabase, user.id, data.id, data.title, data.days_of_week
-        )
+        await generateTodayTaskForTemplate(supabase, user.id, data)
       }
 
       return data

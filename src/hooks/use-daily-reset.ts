@@ -23,18 +23,18 @@ export function useDailyReset() {
 
       const today = format(new Date(), 'yyyy-MM-dd')
       const lastReset = localStorage.getItem(LAST_RESET_KEY)
+      const isNewDay = lastReset !== today
 
-      // Already ran today
-      if (lastReset === today) return
-
-      // Generate routine tasks for today
+      // Always sync tasks (fix missing scheduled_time), but only generate new tasks/check streaks once per day
       await generateDailyTasks(supabase, user.id, today)
 
-      // Update habit streaks (check for broken streaks)
-      await checkAndUpdateStreaks(supabase, user.id)
+      if (isNewDay) {
+        // Update habit streaks (check for broken streaks)
+        await checkAndUpdateStreaks(supabase, user.id)
 
-      // Mark as done for today
-      localStorage.setItem(LAST_RESET_KEY, today)
+        // Mark as done for today
+        localStorage.setItem(LAST_RESET_KEY, today)
+      }
 
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
@@ -54,7 +54,7 @@ async function generateDailyTasks(
   // Check if tasks already exist for today from templates
   const { data: existingTasks } = await supabase
     .from('tasks')
-    .select('template_id')
+    .select('id, template_id, scheduled_time')
     .eq('user_id', userId)
     .eq('date', today)
     .eq('is_routine', true)
@@ -67,21 +67,36 @@ async function generateDailyTasks(
     .select('*')
     .eq('user_id', userId)
     .eq('is_active', true)
-    .order('order_index', { ascending: true })
 
   if (!templates || templates.length === 0) return
+
+  // Sync scheduled_time for existing tasks that are missing it
+  if (existingTasks && existingTasks.length > 0) {
+    const templateMap = new Map(templates.map(t => [t.id, t]))
+    for (const task of existingTasks) {
+      if (!task.scheduled_time && task.template_id) {
+        const template = templateMap.get(task.template_id)
+        if (template?.start_time) {
+          await supabase
+            .from('tasks')
+            .update({ scheduled_time: template.start_time })
+            .eq('id', task.id)
+        }
+      }
+    }
+  }
 
   // Get current day of week (0 = Sunday, 1 = Monday, etc.)
   const dayOfWeek = new Date().getDay()
 
-  // Filter templates for today
+  // Filter templates for today that don't have tasks yet
   const todayTemplates = templates.filter(t =>
     t.days_of_week.includes(dayOfWeek) && !existingTemplateIds.has(t.id)
   )
 
   if (todayTemplates.length === 0) return
 
-  // Create tasks for each template
+  // Create tasks for each template (preserving order and time)
   const tasksToInsert = todayTemplates.map(template => ({
     user_id: userId,
     template_id: template.id,
@@ -89,6 +104,8 @@ async function generateDailyTasks(
     date: today,
     is_completed: false,
     is_routine: true,
+    order_index: template.order_index,
+    scheduled_time: template.start_time ?? null,
   }))
 
   await supabase.from('tasks').insert(tasksToInsert)

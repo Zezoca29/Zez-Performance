@@ -17,18 +17,38 @@ export function useTasksToday() {
 
       const { data: tasks, error } = await supabase
         .from('tasks')
-        .select('*')
+        .select('*, routine_templates(start_time)')
         .eq('user_id', user.id)
         .eq('date', today)
         .order('created_at', { ascending: true })
 
       if (error) throw error
 
-      const total = tasks?.length ?? 0
-      const completed = tasks?.filter(t => t.is_completed).length ?? 0
+      // Resolve scheduled_time: use task's own value, or fallback to template's start_time
+      const resolved = (tasks ?? []).map(task => {
+        const templateTime = (task as any).routine_templates?.start_time ?? null
+        const scheduled_time = task.scheduled_time || templateTime
+        // Remove the joined relation from the final object
+        const { routine_templates: _, ...rest } = task as any
+        return { ...rest, scheduled_time } as Task
+      })
+
+      // Sort: tasks with scheduled_time first (by time asc), then tasks without
+      const sorted = resolved.sort((a, b) => {
+        const timeA = a.scheduled_time
+        const timeB = b.scheduled_time
+        if (timeA && timeB) return timeA.localeCompare(timeB)
+        if (timeA && !timeB) return -1
+        if (!timeA && timeB) return 1
+        if (a.order_index !== b.order_index) return a.order_index - b.order_index
+        return a.created_at.localeCompare(b.created_at)
+      })
+
+      const total = sorted.length
+      const completed = sorted.filter(t => t.is_completed).length
       const percentage = total > 0 ? Math.round((completed / total) * 100) : 0
 
-      return { total, completed, percentage, tasks: tasks as Task[] }
+      return { total, completed, percentage, tasks: sorted }
     },
   })
 }

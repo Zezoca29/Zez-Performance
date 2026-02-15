@@ -63,6 +63,8 @@ CREATE TABLE tasks (
   date DATE DEFAULT CURRENT_DATE,
   is_completed BOOLEAN DEFAULT FALSE,
   is_routine BOOLEAN DEFAULT FALSE,
+  order_index INTEGER DEFAULT 0,
+  scheduled_time TIME,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_tasks_date ON tasks(user_id, date);

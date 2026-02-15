@@ -45,6 +45,8 @@ export interface Task {
   date: string
   is_completed: boolean
   is_routine: boolean
+  order_index: number
+  scheduled_time: string | null
   created_at: string
 }
 
